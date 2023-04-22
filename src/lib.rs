@@ -1,6 +1,6 @@
 use std::{ops::{Range, BitAndAssign, BitXorAssign, Add, Shl}};
 
-use num::PrimInt;
+use num_traits::PrimInt;
 
 fn num_bits<T>() -> usize { std::mem::size_of::<T>() * 8 }
 
