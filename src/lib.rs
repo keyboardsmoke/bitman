@@ -1,4 +1,4 @@
-use std::{ops::{Range, BitAndAssign, BitXorAssign, Add}, rc::{Weak, Rc}};
+use std::{ops::{Range, BitAndAssign, BitXorAssign, Add, Shl}};
 
 use num::PrimInt;
 
@@ -26,23 +26,21 @@ pub struct BitIndexerSt<T>
     value: T
 }
 
-pub struct BitIndexerMutSt<T>
+pub struct BitIndexerMutSt<'a, T>
 {
-    value: Weak<*mut T>
+    value: &'a mut T
 }
 
-impl<T> BitIndexerMutSt<T>
+impl<'a, T> BitIndexerMutSt<'a, T>
 {
     // Avoid exposing this
     fn set_value(&mut self, value: T)
     {
-        let ow = self.value.clone();
-        let m = unsafe { *ow.into_raw().as_ref().unwrap() };
-        unsafe { *m = value };
+        *self.value = value;
     }
 }
 
-impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign
+impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
 {
     fn value(&self) -> T {
         self.value
@@ -76,17 +74,15 @@ impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAn
             return T::zero();
         }
         let index = range.start;
-        let mask = bit_mask(Range { start: range.start as usize, end: range.end as usize });
-        (self.value() & T::from(mask).unwrap()) >> index
+        let mask = bit_mask_with::<T>(range.start .. range.end);
+        (self.value() & mask) >> index
     }
 }
 
-impl<T> BitIndexer<T> for BitIndexerMutSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign
+impl<'a, T> BitIndexer<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
 {
     fn value(&self) -> T {
-        let weak = self.value.clone();
-        let p = weak.into_raw();
-        unsafe { p.read().read() }
+        return *self.value;
     }
 
     fn get(&self, index: usize) -> bool {
@@ -117,12 +113,12 @@ impl<T> BitIndexer<T> for BitIndexerMutSt<T> where T: Add + Sized + PrimInt + Bi
             return T::zero();
         }
         let index = range.start;
-        let mask = bit_mask(Range { start: range.start as usize, end: range.end as usize });
-        (self.value() & T::from(mask).unwrap()) >> index
+        let mask = bit_mask_with::<T>(range.start .. range.end);
+        (self.value() & mask) >> index
     }
 }
 
-impl<T> BitIndexerMut<T> for BitIndexerMutSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign
+impl<'a, T> BitIndexerMut<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
 {
     fn clear(&mut self, index: usize) {
         self.set_value(self.value() & !(T::one() << index));
@@ -160,10 +156,10 @@ pub trait BitManipulator<T>
     fn bits_mut(&mut self) -> BitIndexerMutSt<T>;
 }
 
-fn bit_mask(range: Range<usize>) -> usize {
+fn bit_mask_with<T>(range: Range<usize>) -> T where T: PrimInt + Shl {
     let size = range.end - range.start;
-    let m0: usize = (1 << size) - 1;
-    let m1: usize = m0 << range.start;
+    let m0 = (T::one() << size) - T::one();
+    let m1 = m0 << range.start;
     m1
 }
 
@@ -174,9 +170,7 @@ impl<T> BitManipulator<T> for T where T: Add + Sized + PrimInt + BitAndAssign + 
     }
 
     fn bits_mut(&mut self) -> BitIndexerMutSt<T> {
-        let rc = Rc::new(self as *mut T);
-        let weak = Rc::downgrade(&rc);
-        BitIndexerMutSt { value: weak }
+        BitIndexerMutSt { value: self }
     }
 }
 
