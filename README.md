@@ -18,7 +18,7 @@ Bit manipulation for primitive integer types in rust
         assert_eq!(test0, 0xfcffff60);
 
         let mut test1: u32 = 0;
-        test1.bits_mut().set_range(Range { start: 0, end: 32 }, 123);
+        test1.bits_mut().set_range(0..32, 123);
         assert_eq!(test1, 123);
     }
 
@@ -27,10 +27,10 @@ Bit manipulation for primitive integer types in rust
         let test0: u32 = 0x55456F4;
         let test1: u32 = 0xF0000000;
         let test2: u32 = 0xfcffff60;
-        let res1 = test1.bits().get_range(Range { start: 28, end: 32 });
+        let res1 = test1.bits().get_range(28..32);
         assert_eq!(res1, 0xf);
-        let val0 = test0.bits().get_range(Range { start: 4, end: 8 });
-        let val1 = test0.bits().get_range(Range { start: 4, end: 7 });
+        let val0 = test0.bits().get_range(4..8);
+        let val1 = test0.bits().get_range(4..7);
         assert_eq!(val0, 0b1111);
         assert_eq!(val1, 0b111);
         assert_eq!(test2.bits().first(8), 0b01100000);
@@ -40,12 +40,12 @@ Bit manipulation for primitive integer types in rust
     #[test]
     fn test_bit_setter() {
         let mut test0: u32 = 0;
-        test0.bits_mut().set_range(Range { start: 4, end: 8 }, 0b1111);
+        test0.bits_mut().set_range(4..8, 0b1111);
         assert_eq!(test0, 0xf0);
-        test0.bits_mut().set_range(Range { start: 24, end: 28 }, 0b1011);
+        test0.bits_mut().set_range(24..28, 0b1011);
         assert_eq!(test0, 0xb0000f0);
         let mut test1 = u32::max_value(); // 0xffffffff
-        test1.bits_mut().set_range(Range { start: 0, end: 8 }, 0);
+        test1.bits_mut().set_range(0..8, 0);
         assert_eq!(test1, 0xffffff00);
     }
 ```
