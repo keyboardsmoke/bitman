@@ -2,6 +2,8 @@
 
 Bit manipulation for primitive integer types in rust
 
+![badge](https://github.com/keyboardsmoke/bitman/actions/workflows/rust.yml/badge.svg)
+
 ```rust
     #[test]
     fn test_basic_operations() {
