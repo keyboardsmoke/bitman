@@ -1,7 +1,15 @@
 [package]
 name = "bitman"
-version = "0.1.0"
+description = "Bit manipulation library for integral types"
+version = "0.2.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/keyboardsmoke/bitman"
+homepage = "https://github.com/keyboardsmoke/bitman"
+readme = "README.md"
+keywords = ["bit", "bits", "manipulation", "bitwise"]
+categories = ["data-structures"]
+exclude = [".github/", ".git/", "target/"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
