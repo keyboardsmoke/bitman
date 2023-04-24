@@ -1,8 +1,54 @@
-use std::{ops::{Range, BitAndAssign, BitXorAssign, Add, Shl}};
+use std::{ops::{Range, BitAndAssign, BitXorAssign, Add, Shl}, marker::PhantomData};
 
 use num_traits::PrimInt;
 
 fn num_bits<T>() -> usize { std::mem::size_of::<T>() * 8 }
+
+pub struct Vectorized<T>
+{
+    pub bits: Vec<u8>,
+
+    // Force reference to <T> which we only need for the impl...
+    reference: PhantomData<T>
+}
+
+impl<T> Vectorized<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl + Default
+{
+    // Wildcard comparison
+    pub fn compare(&self, values: Vec<Option<u8>>) -> bool {
+        if self.bits.len() != values.len() {
+            return false;
+        }
+        for i in 0..values.len() {
+            let val = values[i];
+            if val.is_none() {
+                // skip comparison
+                continue;
+            }
+            let checked = val.unwrap().clamp(0, 1);
+            let bit = self.bits[i];
+
+            if bit != checked {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    pub fn value(&self) -> T
+    {
+        let mut res: T = T::default();
+        for (i, bit) in self.bits.iter().enumerate() {
+            if *bit > 0 {
+                res.bits_mut().set(i, 1);
+            }
+            else {
+                res.bits_mut().set(i, 0);
+            }
+        }
+        res
+    }
+}
 
 pub trait BitIndexer<T>
 {
@@ -11,6 +57,8 @@ pub trait BitIndexer<T>
     fn first(&self, size: usize) -> T;
     fn last(&self, size: usize) -> T;
     fn get_range(&self, range: Range<usize>) -> T;
+    fn compare_range(&self, range: Range<usize>, compare: T) -> bool;
+    fn vectorize(&self, range: Range<usize>) -> Vectorized<T>;
 }
 
 pub trait BitIndexerMut<T>
@@ -40,7 +88,7 @@ impl<'a, T> BitIndexerMutSt<'a, T>
     }
 }
 
-impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
+impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl + Default
 {
     fn value(&self) -> T {
         self.value
@@ -77,9 +125,22 @@ impl<T> BitIndexer<T> for BitIndexerSt<T> where T: Add + Sized + PrimInt + BitAn
         let mask = bit_mask_with::<T>(range.start .. range.end);
         (self.value() & mask) >> index
     }
+
+    fn compare_range(&self, range: Range<usize>, compare: T) -> bool {
+        let v = self.get_range(range);
+        compare == v
+    }
+
+    fn vectorize(&self, range: Range<usize>) -> Vectorized<T> {
+        let mut v: Vec<u8> = Vec::new();
+        for i in range.start..range.end {
+            v.push(self.get(i) as u8);
+        }
+        Vectorized { bits: v, reference: PhantomData::default() }
+    }
 }
 
-impl<'a, T> BitIndexer<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
+impl<'a, T> BitIndexer<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl + Default
 {
     fn value(&self) -> T {
         return *self.value;
@@ -116,9 +177,22 @@ impl<'a, T> BitIndexer<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + Prim
         let mask = bit_mask_with::<T>(range.start .. range.end);
         (self.value() & mask) >> index
     }
+
+    fn compare_range(&self, range: Range<usize>, compare: T) -> bool {
+        let v = self.get_range(range);
+        compare == v
+    }
+
+    fn vectorize(&self, range: Range<usize>) -> Vectorized<T> {
+        let mut v: Vec<u8> = Vec::new();
+        for i in range.start..range.end {
+            v.push(self.get(i) as u8);
+        }
+        Vectorized { bits: v, reference: PhantomData::default() }
+    }
 }
 
-impl<'a, T> BitIndexerMut<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl
+impl<'a, T> BitIndexerMut<T> for BitIndexerMutSt<'a, T> where T: Add + Sized + PrimInt + BitAndAssign + BitXorAssign + Shl + Default
 {
     fn clear(&mut self, index: usize) {
         self.set_value(self.value() & !(T::one() << index));
@@ -230,5 +304,15 @@ mod test
         let mut test1 = u32::max_value(); // 0xffffffff
         test1.bits_mut().set_range(0..8, 0);
         assert_eq!(test1, 0xffffff00);
+    }
+
+    #[test]
+    fn test_breakout_compare() {
+        let test0: u32 = 0xf8f8f8f8;
+        assert!(test0.bits().vectorize(4..8).compare(vec![Some(1), Some(1), Some(1), Some(1)]));
+        let v = test0.bits().vectorize(0..4);
+        assert!(v.compare(vec![Some(0), Some(0), Some(0), Some(1)]));
+        let vv = v.value();
+        assert_eq!(vv, 8);
     }
 }
